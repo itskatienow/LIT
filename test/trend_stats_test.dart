@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lit/data/trend_stats.dart';
 import 'package:lit/models/app_settings.dart';
 import 'package:lit/models/day_entry.dart';
+import 'package:lit/models/protocol.dart';
 import 'package:lit/util/dates.dart';
 
 void main() {
@@ -85,6 +86,33 @@ void main() {
     final est = s.adherence.firstWhere((a) => a.label == 'Estradiol');
     expect(est.scheduled, 1); // Sunday Nov 1
     expect(s.adherence.any((a) => a.label == 'Pumping'), isFalse);
+  });
+
+  test('estradiol adherence follows the chosen method', () {
+    final week = DateTime(2026, 11, 7); // Day 7, a Saturday
+    Adherence est(EstradiolPlan plan, Map<String, DayEntry> logged) => TrendStats.compute(
+          settings: AppSettings(startDate: start, estradiol: plan),
+          entries: logged,
+          today: week,
+        ).adherence.firstWhere((a) => a.label == 'Estradiol');
+
+    final injections = est(const EstradiolPlan(), {dateKey(DateTime(2026, 11, 4)): const DayEntry(estradiolDoses: 1)});
+    expect(injections.scheduled, 3); // Sun, Wed, Fri
+    expect(injections.logged, 1);
+    expect(injections.unit, 'injections');
+
+    final sublingual = est(
+      const EstradiolPlan(method: EstradiolMethod.sublingual, dailyDoseMg: 2),
+      {
+        dateKey(DateTime(2026, 11, 1)): const DayEntry(estradiolDoses: 2),
+        dateKey(DateTime(2026, 11, 2)): const DayEntry(estradiolDoses: 1),
+      },
+    );
+    expect(sublingual.scheduled, 14); // 2 a day for 7 days
+    expect(sublingual.logged, 3);
+    expect(sublingual.unit, 'doses');
+
+    expect(est(const EstradiolPlan(method: EstradiolMethod.oral), const {}).scheduled, 7);
   });
 
   test('settings round-trip through JSON', () {

@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lit/models/app_settings.dart';
 import 'package:lit/models/protocol.dart';
 import 'package:lit/util/dates.dart';
 
@@ -15,7 +18,7 @@ void main() {
       expect(Protocol.dayNumber(null, start), isNull);
     });
 
-    test('Build is 40 days, Birth 2, then Lactation', () {
+    test('Prime is 40 days, Switch 2, then Supply', () {
       expect(Protocol.phaseForDay(null), Phase.notStarted);
       expect(Protocol.phaseForDay(0), Phase.notStarted);
       expect(Protocol.phaseForDay(1), Phase.build);
@@ -66,24 +69,154 @@ void main() {
     });
   });
 
-  group('hormones', () {
-    test('estradiol: Wednesday AM, Friday PM, Sunday AM', () {
-      expect(Protocol.estradiolSlot(4, DateTime(2026, 11, 4)), EstradiolSlot.morning); // Wed
-      expect(Protocol.estradiolSlot(6, DateTime(2026, 11, 6)), EstradiolSlot.evening); // Fri
-      expect(Protocol.estradiolSlot(8, DateTime(2026, 11, 8)), EstradiolSlot.morning); // Sun
-      expect(Protocol.estradiolSlot(2, DateTime(2026, 11, 2)), isNull); // Mon
-      expect(Protocol.estradiolSlot(0, DateTime(2026, 10, 31)), isNull); // before start
+  group('estradiol', () {
+    const plan = EstradiolPlan(); // the original protocol: 6 mg a week over 3 injections
+    List<EstradiolSlot> slots(EstradiolPlan p, int day) => Protocol.estradiolSlots(day, dayDate(day), p);
+    List<ScheduledEvent> estradiolEvents(EstradiolPlan p, int day) => Protocol.eventsFor(
+          day: day,
+          date: dayDate(day),
+          estradiol: p,
+        ).where((e) => e.kind == EventKind.estradiol).toList();
+
+    test('default: 2 mg injections Wednesday AM, Friday PM, Sunday AM', () {
+      expect(plan.injectionDoseMg, 2);
+      expect(slots(plan, 4), [EstradiolSlot.morning]); // Wed
+      expect(slots(plan, 6), [EstradiolSlot.evening]); // Fri
+      expect(slots(plan, 8), [EstradiolSlot.morning]); // Sun
+      expect(slots(plan, 2), isEmpty); // Mon
+      expect(Protocol.estradiolSlots(0, DateTime(2026, 10, 31), plan), isEmpty); // before start
+      expect(plan.injectionDaysLabel, 'Wed AM, Fri PM, Sun AM');
     });
 
-    test('progesterone nightly through Day 40 only', () {
+    test('2 a week: Wednesday AM and Saturday PM; 1 a week: Wednesday AM', () {
+      const two = EstradiolPlan(injectionsPerWeek: 2);
+      expect(slots(two, 4), [EstradiolSlot.morning]); // Wed
+      expect(slots(two, 7), [EstradiolSlot.evening]); // Sat
+      expect(slots(two, 6), isEmpty); // Fri
+      expect(slots(two, 8), isEmpty); // Sun
+      expect(two.injectionDaysLabel, 'Wed AM, Sat PM');
+
+      const one = EstradiolPlan(injectionsPerWeek: 1);
+      expect([for (var day = 1; day <= 7; day++) ...slots(one, day)], [EstradiolSlot.morning]);
+      expect(one.injectionDaysLabel, 'Wed AM');
+    });
+
+    test('injection dose: weekly ÷ injections, rounded up to the next 0.5 mg', () {
+      double? dose(double weekly, int n) => EstradiolPlan(weeklyDoseMg: weekly, injectionsPerWeek: n).injectionDoseMg;
+      expect(dose(5, 3), 2); // 1.67 → 2
+      expect(dose(10, 3), 3.5); // 3.33 → 3.5
+      expect(dose(6, 3), 2); // already a multiple of 0.5
+      expect(dose(4.5, 3), 1.5);
+      expect(dose(7, 2), 3.5);
+      expect(dose(0.9, 3), 0.5);
+      expect(dose(5, 1), 5);
+
+      const fiveMg = EstradiolPlan(weeklyDoseMg: 5);
+      expect(fiveMg.exactInjectionMg, closeTo(1.667, 0.001));
+      expect(fiveMg.injectionRoundedUp, isTrue);
+      expect(fiveMg.injectedPerWeekMg, 6);
+      expect(plan.injectionRoundedUp, isFalse);
+      expect(const EstradiolPlan(weeklyDoseMg: null).injectionDoseMg, isNull);
+    });
+
+    test('injection volume comes from the strength', () {
+      const p = EstradiolPlan(weeklyDoseMg: 5, strengthMgPerMl: 5);
+      expect(p.injectionVolumeMl, closeTo(0.4, 1e-9));
+      expect(p.doseLabel, '2 mg · 0.4 mL');
+      expect(plan.injectionVolumeMl, isNull);
+      expect(plan.doseLabel, '2 mg');
+      expect(const EstradiolPlan(strengthMgPerMl: 40).doseLabel, '2 mg · 0.05 mL');
+      expect(const EstradiolPlan(strengthMgPerMl: 6).doseLabel, '2 mg · 0.333 mL');
+
+      final friday = estradiolEvents(p, 6).single;
+      expect(friday.title, 'Estradiol 2 mg');
+      expect(friday.detail, 'Injection · 0.4 mL · evening');
+      expect(friday.time, '8:00 PM');
+    });
+
+    test('oral: the daily dose once a day, in the morning', () {
+      const oral = EstradiolPlan(method: EstradiolMethod.oral, dailyDoseMg: 4);
+      for (var day = 1; day <= 7; day++) {
+        expect(slots(oral, day), [EstradiolSlot.morning]);
+      }
+      final event = estradiolEvents(oral, 2).single;
+      expect(event.title, 'Estradiol 4 mg');
+      expect(event.detail, 'Oral');
+      expect(event.time, '8:00 AM');
+    });
+
+    test('sublingual: half the daily dose, morning and evening', () {
+      const sl = EstradiolPlan(method: EstradiolMethod.sublingual, dailyDoseMg: 3);
+      expect(sl.doseMg, 1.5);
+      final events = estradiolEvents(sl, 2);
+      expect(events.map((e) => e.title), ['Estradiol 1.5 mg', 'Estradiol 1.5 mg']);
+      expect(events.map((e) => e.detail), ['Sublingual · morning', 'Sublingual · evening']);
+      expect(events.map((e) => e.time), ['8:00 AM', '8:00 PM']);
+    });
+
+    test('a dose that is not set yet still appears on the schedule', () {
+      const oral = EstradiolPlan(method: EstradiolMethod.oral);
+      expect(oral.doseMg, isNull);
+      expect(oral.doseLabel, isNull);
+      expect(estradiolEvents(oral, 2).single.title, 'Estradiol');
+    });
+
+    test('which schedule times each method uses', () {
+      expect(plan.timeUsage(EstradiolSlot.morning), 'Wednesday & Sunday injections');
+      expect(plan.timeUsage(EstradiolSlot.evening), 'Friday injection');
+      expect(const EstradiolPlan(injectionsPerWeek: 1).timeUsage(EstradiolSlot.evening), isNull);
+      const oral = EstradiolPlan(method: EstradiolMethod.oral);
+      expect(oral.timeUsage(EstradiolSlot.morning), isNotNull);
+      expect(oral.timeUsage(EstradiolSlot.evening), isNull);
+      const sl = EstradiolPlan(method: EstradiolMethod.sublingual);
+      expect(sl.timeUsage(EstradiolSlot.evening), isNotNull);
+    });
+
+    test('saved in settings; settings from before keep the original plan', () {
+      const p = EstradiolPlan(
+        method: EstradiolMethod.sublingual,
+        weeklyDoseMg: null,
+        injectionsPerWeek: 2,
+        strengthMgPerMl: 40,
+        dailyDoseMg: 2.5,
+      );
+      final json = jsonDecode(jsonEncode(AppSettings(estradiol: p).toJson())) as Map<String, dynamic>;
+      expect(AppSettings.fromJson(json).estradiol, p);
+      expect(AppSettings.fromJson(const {}).estradiol, plan);
+      expect(EstradiolPlan.fromJson(const {'injectionsPerWeek': 7, 'method': 'patch'}).injectionsPerWeek, 3);
+    });
+  });
+
+  group('progesterone', () {
+    test('nightly through Day 40 only', () {
       expect(Protocol.progesteroneScheduled(1), isTrue);
       expect(Protocol.progesteroneScheduled(40), isTrue);
       expect(Protocol.progesteroneScheduled(41), isFalse);
     });
+
+    test('the dose comes from Settings, 300 mg by default', () {
+      ScheduledEvent progesterone(double? mg) => Protocol.eventsFor(day: 2, date: dayDate(2), progesteroneMg: mg)
+          .firstWhere((e) => e.kind == EventKind.progesterone);
+      expect(Protocol.eventsFor(day: 2, date: dayDate(2)).firstWhere((e) => e.kind == EventKind.progesterone).title,
+          'Progesterone 300 mg');
+      expect(progesterone(200).title, 'Progesterone 200 mg');
+      expect(progesterone(100.5).title, 'Progesterone 100.5 mg');
+      expect(progesterone(null).title, 'Progesterone');
+    });
+
+    test('dose is saved in settings; settings from before keep 300 mg', () {
+      AppSettings roundTrip(AppSettings s) =>
+          AppSettings.fromJson(jsonDecode(jsonEncode(s.toJson())) as Map<String, dynamic>);
+      expect(const AppSettings().progesteroneMg, 300);
+      expect(AppSettings.fromJson(const {}).progesteroneMg, 300);
+      expect(roundTrip(const AppSettings(progesteroneMg: 200)).progesteroneMg, 200);
+      expect(roundTrip(const AppSettings(progesteroneMg: null)).progesteroneMg, isNull); // cleared stays cleared
+      expect(const AppSettings().reminderSignature, isNot(const AppSettings(progesteroneMg: 200).reminderSignature));
+    });
   });
 
   group('daily schedule', () {
-    test('Build day has domperidone and progesterone, no pumping', () {
+    test('Prime day has domperidone and progesterone, no pumping', () {
       final events = Protocol.eventsFor(day: 2, date: dayDate(2));
       expect(events.where((e) => e.kind == EventKind.domperidone), hasLength(3));
       expect(events.where((e) => e.kind == EventKind.progesterone), hasLength(1));

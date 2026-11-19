@@ -1,5 +1,3 @@
-import 'dart:collection';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -7,8 +5,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/app_settings.dart';
-import '../models/protocol.dart';
-import '../util/dates.dart';
+import 'reminder_plan.dart';
 
 class ReminderStatus {
   const ReminderStatus({
@@ -35,8 +32,7 @@ class ReminderStatus {
 
 /// Schedules local reminders for the protocol.
 ///
-/// The OS only holds a limited number of pending notifications (64 on iOS),
-/// so reminders are scheduled for a rolling window of upcoming days and
+/// Reminders are scheduled for a rolling 7-day window ([reminderHorizon]) and
 /// topped up whenever the app is opened or the settings change.
 class NotificationService {
   final _plugin = FlutterLocalNotificationsPlugin();
@@ -45,6 +41,7 @@ class NotificationService {
   final status = ValueNotifier<ReminderStatus>(const ReminderStatus());
 
   static const _testId = 999999;
+  static const _scheduledTestId = 999998;
 
   static const _details = NotificationDetails(
     android: AndroidNotificationDetails(
@@ -62,9 +59,9 @@ class NotificationService {
   bool get _isIOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
   bool get isSupported => _isAndroid || _isIOS;
 
-  /// iOS keeps at most 64 pending notifications; Android allows many more
-  /// (Samsung caps alarms at 500).
-  int get _maxScheduled => _isIOS ? 60 : 200;
+  /// Safety cap below the OS limits (iOS keeps 64 pending notifications;
+  /// Samsung caps an app at 500 alarms). A 7-day window is ~70 at most.
+  int get _maxScheduled => _isIOS ? 60 : 150;
 
   AndroidFlutterLocalNotificationsPlugin? get _android =>
       _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
@@ -129,6 +126,12 @@ class NotificationService {
     return false;
   }
 
+  Future<bool> _exactAllowed() async =>
+      _isAndroid ? (await _android?.canScheduleExactNotifications() ?? false) : true;
+
+  static AndroidScheduleMode _mode(bool exact) =>
+      exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle;
+
   Future<void> showTest() async {
     if (!_ready) return;
     await _plugin.show(
@@ -139,13 +142,61 @@ class NotificationService {
     );
   }
 
-  /// Cancels everything and schedules the upcoming window from [settings].
-  Future<void> reschedule(AppSettings settings) async {
+  /// When a scheduled test is pending, so rescheduling can keep it.
+  DateTime? _scheduledTestAt;
+
+  /// Schedules a test reminder through the same alarm path as real
+  /// reminders. Lock the phone and wait to confirm delivery.
+  Future<DateTime?> scheduleTest({Duration delay = const Duration(minutes: 1)}) async {
+    if (!_ready) return null;
+    final at = DateTime.now().add(delay);
+    await _scheduleTestAt(at, await _exactAllowed());
+    return at;
+  }
+
+  Future<void> _scheduleTestAt(DateTime at, bool exact) async {
+    _scheduledTestAt = at;
+    await _plugin.zonedSchedule(
+      id: _scheduledTestId,
+      scheduledDate: tz.TZDateTime.from(at, tz.local),
+      notificationDetails: _details,
+      androidScheduleMode: _mode(exact),
+      title: 'LIT test reminder',
+      body: exact
+          ? 'Scheduled reminders are working.'
+          : 'Scheduled reminders are working, but without exact timing they may arrive late.',
+    );
+  }
+
+  Future<void>? _running;
+  AppSettings? _queued;
+
+  /// Replaces pending reminders with the upcoming window from [settings].
+  /// Calls made while one is running are coalesced into one more run.
+  Future<void> reschedule(AppSettings settings) {
+    _queued = settings;
+    return _running ??= _drain().whenComplete(() => _running = null);
+  }
+
+  Future<void> _drain() async {
+    while (_queued != null) {
+      final next = _queued!;
+      _queued = null;
+      await _reschedule(next);
+    }
+  }
+
+  Future<void> _reschedule(AppSettings settings) async {
     if (!_ready) return;
     try {
-      await _plugin.cancelAll();
+      // Pending only: reminders already showing in the tray stay put.
+      await _plugin.cancelAllPendingNotifications();
       final granted = await _permissionGranted();
-      final exact = _isAndroid ? (await _android?.canScheduleExactNotifications() ?? false) : true;
+      final exact = await _exactAllowed();
+      final testAt = _scheduledTestAt;
+      if (testAt != null && testAt.isAfter(DateTime.now().add(const Duration(seconds: 2)))) {
+        await _scheduleTestAt(testAt, exact);
+      }
 
       final start = settings.startDate;
       if (!settings.remindersEnabled || start == null || settings.reminderKinds.isEmpty || !granted) {
@@ -153,55 +204,27 @@ class NotificationService {
         return;
       }
 
-      // Group events by moment so e.g. a 6 AM dose and a 6 AM pump arrive as
-      // one notification. Start from yesterday so its overnight items count.
-      final now = DateTime.now();
-      final base = dateOnly(now);
-      final byMoment = SplayTreeMap<DateTime, List<({int day, ScheduledEvent event})>>();
-      for (var i = -1; i <= 45 && byMoment.length < _maxScheduled; i++) {
-        final date = addDays(base, i);
-        final day = Protocol.dayNumber(start, date)!;
-        if (day < 1) continue;
-        for (final event in Protocol.eventsFor(day: day, date: date, times: settings.times)) {
-          if (!settings.reminderKinds.contains(event.kind)) continue;
-          final at = event.at(date);
-          if (!at.isAfter(now)) continue;
-          byMoment.putIfAbsent(at, () => []).add((day: day, event: event));
-        }
-      }
-
-      var id = 0;
-      DateTime? last;
-      for (final slot in byMoment.entries.take(_maxScheduled)) {
-        final day = slot.value.first.day;
-        final events = slot.value.map((e) => e.event).toList();
+      final slots = planReminders(settings, DateTime.now(), limit: _maxScheduled);
+      for (var id = 0; id < slots.length; id++) {
         await _plugin.zonedSchedule(
-          id: id++,
-          scheduledDate: tz.TZDateTime.from(slot.key, tz.local),
+          id: id,
+          scheduledDate: tz.TZDateTime.from(slots[id].at, tz.local),
           notificationDetails: _details,
-          androidScheduleMode:
-              exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexactAllowWhileIdle,
-          title: events.map((e) => e.title).join(' + '),
-          body: _body(day, events),
+          androidScheduleMode: _mode(exact),
+          title: slots[id].title,
+          body: slots[id].body,
         );
-        last = slot.key;
       }
 
       status.value = ReminderStatus(
         permissionGranted: true,
         exactAlarms: exact,
-        scheduledCount: id,
-        scheduledThrough: last,
+        scheduledCount: slots.length,
+        scheduledThrough: slots.isEmpty ? null : slots.last.at,
       );
     } catch (e) {
       debugPrint('LIT: scheduling failed: $e');
       status.value = ReminderStatus(error: '$e');
     }
-  }
-
-  String _body(int day, List<ScheduledEvent> events) {
-    final phase = Protocol.phaseForDay(day).label;
-    final details = events.map((e) => e.detail).join(' · ');
-    return 'Day $day · $phase phase — $details';
   }
 }

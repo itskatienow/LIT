@@ -1,0 +1,22 @@
+{
+  // Ctrl+Shift+B runs the default build task below.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install LIT on phone (keeps data)",
+      "detail": "Release build, updated in place with adb install -r, then opened so reminders are scheduled.",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\android\\install-release.ps1"
+      ],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    }
+  ]
+}

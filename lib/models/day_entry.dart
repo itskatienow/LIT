@@ -1,7 +1,7 @@
 /// Everything logged for one calendar day.
 class DayEntry {
   const DayEntry({
-    this.estradiolTaken = false,
+    this.estradiolDoses = 0,
     this.progesteroneTaken = false,
     this.domperidoneTablets = 0,
     this.pumped = false,
@@ -13,7 +13,8 @@ class DayEntry {
 
   static const empty = DayEntry();
 
-  final bool estradiolTaken;
+  /// Estradiol doses taken: 0 or 1, or up to 2 when sublingual.
+  final int estradiolDoses;
   final bool progesteroneTaken;
 
   /// 10 mg tablets taken.
@@ -35,7 +36,7 @@ class DayEntry {
   double? get countedOutputMl => pumped ? outputMl : null;
 
   bool get isEmpty =>
-      !estradiolTaken &&
+      estradiolDoses == 0 &&
       !progesteroneTaken &&
       domperidoneTablets == 0 &&
       !pumped &&
@@ -45,7 +46,7 @@ class DayEntry {
       notes.trim().isEmpty;
 
   DayEntry copyWith({
-    bool? estradiolTaken,
+    int? estradiolDoses,
     bool? progesteroneTaken,
     int? domperidoneTablets,
     bool? pumped,
@@ -56,7 +57,7 @@ class DayEntry {
     String? notes,
   }) =>
       DayEntry(
-        estradiolTaken: estradiolTaken ?? this.estradiolTaken,
+        estradiolDoses: estradiolDoses ?? this.estradiolDoses,
         progesteroneTaken: progesteroneTaken ?? this.progesteroneTaken,
         domperidoneTablets: domperidoneTablets ?? this.domperidoneTablets,
         pumped: pumped ?? this.pumped,
@@ -67,7 +68,9 @@ class DayEntry {
       );
 
   Map<String, dynamic> toJson() => {
-        'estradiol': estradiolTaken,
+        // 'estradiol' stays so older versions of LIT can still read it.
+        'estradiol': estradiolDoses > 0,
+        if (estradiolDoses > 0) 'estradiolDoses': estradiolDoses,
         'progesterone': progesteroneTaken,
         'domperidone': domperidoneTablets,
         'pumped': pumped,
@@ -78,7 +81,7 @@ class DayEntry {
       };
 
   factory DayEntry.fromJson(Map<String, dynamic> json) => DayEntry(
-        estradiolTaken: json['estradiol'] as bool? ?? false,
+        estradiolDoses: (json['estradiolDoses'] as num?)?.toInt() ?? (json['estradiol'] == true ? 1 : 0),
         progesteroneTaken: json['progesterone'] as bool? ?? false,
         domperidoneTablets: (json['domperidone'] as num?)?.toInt() ?? 0,
         pumped: json['pumped'] as bool? ?? false,

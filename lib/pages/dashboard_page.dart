@@ -8,6 +8,7 @@ import '../models/protocol.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../util/dates.dart';
+import '../util/numbers.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({
@@ -66,7 +67,11 @@ class DashboardPage extends StatelessWidget {
                   onTap: () => _pickDate(context, date),
                 ),
                 const SizedBox(height: 8),
-                PhaseHeader(settings: store.settings, date: date, isToday: isToday),
+                PhaseHeader(
+                  settings: store.settings,
+                  date: date,
+                  isToday: isToday,
+                ),
                 if (store.settings.startDate == null) ...[
                   const SizedBox(height: 12),
                   _SetupCard(onOpenSettings: onOpenSettings),
@@ -87,7 +92,12 @@ class DashboardPage extends StatelessWidget {
 }
 
 class _DateNavigator extends StatelessWidget {
-  const _DateNavigator({required this.date, required this.isToday, required this.onChanged, required this.onTap});
+  const _DateNavigator({
+    required this.date,
+    required this.isToday,
+    required this.onChanged,
+    required this.onTap,
+  });
 
   final DateTime date;
   final bool isToday;
@@ -116,12 +126,16 @@ class _DateNavigator extends StatelessWidget {
                   Text(
                     isToday ? 'Today · $weekday' : weekday,
                     style: theme.textTheme.labelLarge?.copyWith(
-                      color: isToday ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                      color: isToday
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                   Text(
                     formatMonthDayYear(date),
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -138,9 +152,14 @@ class _DateNavigator extends StatelessWidget {
   }
 }
 
-/// The phase banner: Build / Birth / Lactation, day count and next milestone.
+/// The phase banner: Prime / Switch / Supply, day count and next milestone.
 class PhaseHeader extends StatelessWidget {
-  const PhaseHeader({super.key, required this.settings, required this.date, required this.isToday});
+  const PhaseHeader({
+    super.key,
+    required this.settings,
+    required this.date,
+    required this.isToday,
+  });
 
   final AppSettings settings;
   final DateTime date;
@@ -165,7 +184,8 @@ class PhaseHeader extends StatelessWidget {
       caption = 'Set a start date to see your phase and schedule.';
     } else if (day! < 1) {
       headline = 'Not started';
-      caption = 'Day 1 is ${formatShort(start)} (${relativeDays(1 - day)}${isToday ? '' : ' from this date'}).';
+      caption =
+          'Day 1 is ${formatShort(start)} (${relativeDays(1 - day)}${isToday ? '' : ' from this date'}).';
     } else {
       switch (phase) {
         case Phase.build || Phase.birth:
@@ -175,20 +195,26 @@ class PhaseHeader extends StatelessWidget {
           suffix = 'of $length';
           progress = dayInPhase / length;
           final left = length - dayInPhase;
-          final next = phase == Phase.build ? 'Birth' : 'Lactation';
-          caption = left == 0 ? 'Last day before $next' : '$left ${left == 1 ? 'day' : 'days'} until $next';
+          final next = (phase == Phase.build ? Phase.birth : Phase.lactation).label;
+          caption = left == 0
+              ? 'Last day before $next'
+              : '$left ${left == 1 ? 'day' : 'days'} until $next';
         case Phase.lactation:
           headline = 'Day ${day - Protocol.phaseStartDay(Phase.lactation) + 1}';
-          suffix = 'of lactation';
         case Phase.notStarted:
           headline = 'Not started';
       }
     }
 
-    final milestone = start != null && day != null ? _milestoneText(start, day) : null;
+    final milestone = start != null && day != null
+        ? _milestoneText(start, day)
+        : null;
 
     return Container(
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(24),
+      ),
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,7 +225,9 @@ class PhaseHeader extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  phase == Phase.notStarted ? 'PROTOCOL' : '${phase.label.toUpperCase()} PHASE',
+                  phase == Phase.notStarted
+                      ? 'PROTOCOL'
+                      : '${phase.label.toUpperCase()} PHASE',
                   style: theme.textTheme.labelLarge?.copyWith(
                     color: onColor,
                     letterSpacing: 1.4,
@@ -209,14 +237,19 @@ class PhaseHeader extends StatelessWidget {
               ),
               if (day != null && day >= 1)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: onColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
                     'Protocol day $day',
-                    style: theme.textTheme.labelMedium?.copyWith(color: onColor),
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: onColor,
+                    ),
                   ),
                 ),
             ],
@@ -228,11 +261,19 @@ class PhaseHeader extends StatelessWidget {
             children: [
               Text(
                 headline,
-                style: theme.textTheme.headlineLarge?.copyWith(color: onColor, fontWeight: FontWeight.w700),
+                style: theme.textTheme.headlineLarge?.copyWith(
+                  color: onColor,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               if (suffix != null) ...[
                 const SizedBox(width: 8),
-                Text(suffix, style: theme.textTheme.titleMedium?.copyWith(color: onColor.withValues(alpha: 0.8))),
+                Text(
+                  suffix,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: onColor.withValues(alpha: 0.8),
+                  ),
+                ),
               ],
             ],
           ),
@@ -248,7 +289,10 @@ class PhaseHeader extends StatelessWidget {
           ],
           if (caption != null) ...[
             const SizedBox(height: 10),
-            Text(caption, style: theme.textTheme.bodyMedium?.copyWith(color: onColor)),
+            Text(
+              caption,
+              style: theme.textTheme.bodyMedium?.copyWith(color: onColor),
+            ),
           ],
           if (milestone != null) ...[
             const SizedBox(height: 10),
@@ -257,7 +301,12 @@ class PhaseHeader extends StatelessWidget {
               children: [
                 Icon(Icons.flag_outlined, size: 18, color: onColor),
                 const SizedBox(width: 8),
-                Expanded(child: Text(milestone, style: theme.textTheme.bodyMedium?.copyWith(color: onColor))),
+                Expanded(
+                  child: Text(
+                    milestone,
+                    style: theme.textTheme.bodyMedium?.copyWith(color: onColor),
+                  ),
+                ),
               ],
             ),
           ],
@@ -290,7 +339,9 @@ class _SetupCard extends StatelessWidget {
       child: ListTile(
         leading: const Icon(Icons.event_available_outlined),
         title: const Text('Set your start date'),
-        subtitle: const Text('Phases, schedules and reminders are based on Day 1.'),
+        subtitle: const Text(
+          'Phases, schedules and reminders are based on Day 1.',
+        ),
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: onOpenSettings,
       ),
@@ -317,7 +368,9 @@ class _DayEditorState extends State<DayEditor> {
   void initState() {
     super.initState();
     final entry = widget.store.entryFor(widget.date);
-    _output = TextEditingController(text: entry.outputMl == null ? '' : _formatMl(entry.outputMl!));
+    _output = TextEditingController(
+      text: entry.outputMl == null ? '' : _formatMl(entry.outputMl!),
+    );
     _notes = TextEditingController(text: entry.notes);
   }
 
@@ -328,10 +381,14 @@ class _DayEditorState extends State<DayEditor> {
     super.dispose();
   }
 
-  static String _formatMl(double ml) => ml == ml.roundToDouble() ? ml.toInt().toString() : ml.toString();
+  static String _formatMl(double ml) =>
+      ml == ml.roundToDouble() ? ml.toInt().toString() : ml.toString();
 
   void _update(DayEntry Function(DayEntry current) change) {
-    widget.store.saveEntry(widget.date, change(widget.store.entryFor(widget.date)));
+    widget.store.saveEntry(
+      widget.date,
+      change(widget.store.entryFor(widget.date)),
+    );
   }
 
   @override
@@ -345,31 +402,41 @@ class _DayEditorState extends State<DayEditor> {
     final active = day != null && day >= 1;
 
     // ---- Subtitles describing what's scheduled ----
-    final slot = active ? Protocol.estradiolSlot(day, date) : null;
-    final estradiolNote = slot == null
-        ? (active ? 'No injection today' : '${Protocol.estradiolMg} mg · Wed AM, Fri PM, Sun AM')
-        : '${Protocol.estradiolMg} mg injection · ${slot == EstradiolSlot.morning ? 'morning' : 'evening'}';
+    final estradiol = settings.estradiol;
+    final sublingual = estradiol.method == EstradiolMethod.sublingual;
+    final estradiolNote = _estradiolNote(
+      estradiol,
+      active ? Protocol.estradiolSlots(day, date, estradiol) : null,
+    );
 
+    final progesteroneMg = settings.progesteroneMg;
+    final progesteroneDose = progesteroneMg == null ? null : '${formatDecimal(progesteroneMg)} mg';
     final String progesteroneNote;
-    if (!active) {
-      progesteroneNote = '${Protocol.progesteroneMg} mg nightly, Days 1–${Protocol.lastProgesteroneDay}';
+    if (progesteroneDose == null && !(active && day > Protocol.lastProgesteroneDay)) {
+      progesteroneNote = 'Set your dose in Settings';
+    } else if (!active) {
+      progesteroneNote =
+          '$progesteroneDose nightly, Days 1–${Protocol.lastProgesteroneDay}';
     } else if (Protocol.progesteroneScheduled(day)) {
       final left = Protocol.lastProgesteroneDay - day;
       progesteroneNote =
-          '${Protocol.progesteroneMg} mg tonight · ${left == 0 ? 'last dose' : '$left ${left == 1 ? 'night' : 'nights'} left after tonight'}';
+          '$progesteroneDose tonight · ${left == 0 ? 'last dose' : '$left ${left == 1 ? 'night' : 'nights'} left after tonight'}';
     } else {
-      progesteroneNote = 'Finished — last dose was Day ${Protocol.lastProgesteroneDay}';
+      progesteroneNote =
+          'Finished — last dose was Day ${Protocol.lastProgesteroneDay}';
     }
 
-    final scheduledTablets = active ? Protocol.domperidoneTabletsForDay(day) : 0;
+    final scheduledTablets = active
+        ? Protocol.domperidoneTabletsForDay(day)
+        : 0;
     final domperidoneNote = active
         ? '$scheduledTablets tablets scheduled (${Protocol.domperidoneMgForDay(day)} mg)'
         : '${Protocol.domperidoneTabletMg} mg tablets';
 
     final pumpingNote = !active || !Protocol.pumpingScheduled(day)
         ? (start == null
-            ? 'Begins Day ${Protocol.pumpingStartDay}'
-            : 'Begins Day ${Protocol.pumpingStartDay} · ${formatShort(Protocol.dateForDay(start, Protocol.pumpingStartDay))}')
+              ? 'Begins Day ${Protocol.pumpingStartDay}'
+              : 'Begins Day ${Protocol.pumpingStartDay} · ${formatShort(Protocol.dateForDay(start, Protocol.pumpingStartDay))}')
         : '${Protocol.pumpSessionsPerDay} sessions scheduled · 15–20 min each';
 
     final powerNote = active && Protocol.powerPumpingScheduled(day)
@@ -385,23 +452,46 @@ class _DayEditorState extends State<DayEditor> {
             children: [
               ControlRow(
                 icon: eventIcon(EventKind.estradiol),
-                title: 'Estradiol',
+                title: switch (estradiol.method) {
+                  EstradiolMethod.injection => 'Estradiol Injection',
+                  EstradiolMethod.oral => 'Oral Estradiol',
+                  EstradiolMethod.sublingual => 'Sublingual Estradiol',
+                },
                 subtitle: estradiolNote,
-                onTap: () => _update((e) => e.copyWith(estradiolTaken: !e.estradiolTaken)),
-                trailing: Switch(
-                  value: entry.estradiolTaken,
-                  onChanged: (v) => _update((e) => e.copyWith(estradiolTaken: v)),
-                ),
+                onTap: sublingual
+                    ? null
+                    : () => _update(
+                        (e) => e.copyWith(
+                          estradiolDoses: e.estradiolDoses > 0 ? 0 : 1,
+                        ),
+                      ),
+                trailing: sublingual
+                    ? CountStepper(
+                        label: 'estradiol doses',
+                        value: entry.estradiolDoses,
+                        max: 2,
+                        onChanged: (v) =>
+                            _update((e) => e.copyWith(estradiolDoses: v)),
+                      )
+                    : Switch(
+                        value: entry.estradiolDoses > 0,
+                        onChanged: (v) => _update(
+                          (e) => e.copyWith(estradiolDoses: v ? 1 : 0),
+                        ),
+                      ),
               ),
               const Divider(indent: 56),
               ControlRow(
                 icon: eventIcon(EventKind.progesterone),
                 title: 'Progesterone',
                 subtitle: progesteroneNote,
-                onTap: () => _update((e) => e.copyWith(progesteroneTaken: !e.progesteroneTaken)),
+                onTap: () => _update(
+                  (e) => e.copyWith(progesteroneTaken: !e.progesteroneTaken),
+                ),
                 trailing: Switch(
                   value: entry.progesteroneTaken,
-                  onChanged: (v) => _update((e) => e.copyWith(progesteroneTaken: v)),
+                  onChanged: (v) =>
+                      _update((e) => e.copyWith(progesteroneTaken: v)),
                 ),
               ),
               const Divider(indent: 56),
@@ -412,7 +502,8 @@ class _DayEditorState extends State<DayEditor> {
                 trailing: CountStepper(
                   label: 'domperidone tablets',
                   value: entry.domperidoneTablets,
-                  onChanged: (v) => _update((e) => e.copyWith(domperidoneTablets: v)),
+                  onChanged: (v) =>
+                      _update((e) => e.copyWith(domperidoneTablets: v)),
                 ),
               ),
             ],
@@ -448,7 +539,8 @@ class _DayEditorState extends State<DayEditor> {
                       label: 'pump sessions',
                       value: entry.pumpSessions,
                       max: 24,
-                      onChanged: (v) => _update((e) => e.copyWith(pumpSessions: v)),
+                      onChanged: (v) =>
+                          _update((e) => e.copyWith(pumpSessions: v)),
                     ),
                   ),
                   const Divider(indent: 56),
@@ -456,10 +548,12 @@ class _DayEditorState extends State<DayEditor> {
                     icon: eventIcon(EventKind.powerPump),
                     title: 'Power pumped',
                     subtitle: powerNote,
-                    onTap: () => _update((e) => e.copyWith(powerPumped: !e.powerPumped)),
+                    onTap: () =>
+                        _update((e) => e.copyWith(powerPumped: !e.powerPumped)),
                     trailing: Switch(
                       value: entry.powerPumped,
-                      onChanged: (v) => _update((e) => e.copyWith(powerPumped: v)),
+                      onChanged: (v) =>
+                          _update((e) => e.copyWith(powerPumped: v)),
                     ),
                   ),
                   const Divider(indent: 56),
@@ -467,12 +561,18 @@ class _DayEditorState extends State<DayEditor> {
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
                     child: TextField(
                       controller: _output,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       textInputAction: TextInputAction.done,
                       inputFormatters: [
                         TextInputFormatter.withFunction(
                           (oldValue, newValue) =>
-                              RegExp(r'^\d{0,5}(\.\d{0,1})?$').hasMatch(newValue.text) ? newValue : oldValue,
+                              RegExp(
+                                r'^\d{0,5}(\.\d{0,1})?$',
+                              ).hasMatch(newValue.text)
+                              ? newValue
+                              : oldValue,
                         ),
                       ],
                       decoration: const InputDecoration(
@@ -482,7 +582,11 @@ class _DayEditorState extends State<DayEditor> {
                       ),
                       onChanged: (text) {
                         final ml = double.tryParse(text);
-                        _update((e) => ml == null ? e.copyWith(clearOutput: true) : e.copyWith(outputMl: ml));
+                        _update(
+                          (e) => ml == null
+                              ? e.copyWith(clearOutput: true)
+                              : e.copyWith(outputMl: ml),
+                        );
                       },
                     ),
                   ),
@@ -501,7 +605,8 @@ class _DayEditorState extends State<DayEditor> {
               maxLines: 10,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
-                hintText: 'Symptoms, side effects, supply changes, anything worth remembering…',
+                hintText:
+                    'Symptoms, side effects, supply changes, anything worth remembering…',
               ),
               onChanged: (text) => _update((e) => e.copyWith(notes: text)),
             ),
@@ -509,26 +614,64 @@ class _DayEditorState extends State<DayEditor> {
         ),
         if (active) ...[
           SectionHeader('Schedule · Day $day'),
-          _ScheduleCard(day: day, date: date, times: settings.times),
+          _ScheduleCard(
+            day: day,
+            date: date,
+            times: settings.times,
+            estradiol: estradiol,
+            progesteroneMg: settings.progesteroneMg,
+          ),
         ],
       ],
     );
   }
+
+  /// [today] is null when the date is outside the protocol.
+  static String _estradiolNote(EstradiolPlan plan, List<EstradiolSlot>? today) {
+    final dose = plan.doseLabel;
+    switch (plan.method) {
+      case EstradiolMethod.injection:
+        if (dose == null) return 'Set your weekly dose in Settings';
+        if (today == null) return '$dose · ${plan.injectionDaysLabel}';
+        if (today.isEmpty) return 'No injection today';
+        return '$dose · ${today.first.label}';
+      case EstradiolMethod.oral:
+        return dose == null ? 'Set your daily dose in Settings' : '$dose · once a day';
+      case EstradiolMethod.sublingual:
+        return dose == null ? 'Set your daily dose in Settings' : '$dose morning + $dose evening';
+    }
+  }
 }
 
 class _ScheduleCard extends StatelessWidget {
-  const _ScheduleCard({required this.day, required this.date, required this.times});
+  const _ScheduleCard({
+    required this.day,
+    required this.date,
+    required this.times,
+    required this.estradiol,
+    required this.progesteroneMg,
+  });
 
   final int day;
   final DateTime date;
   final ReminderTimes times;
+  final EstradiolPlan estradiol;
+  final double? progesteroneMg;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final events = Protocol.eventsFor(day: day, date: date, times: times);
+    final events = Protocol.eventsFor(
+      day: day,
+      date: date,
+      times: times,
+      estradiol: estradiol,
+      progesteroneMg: progesteroneMg,
+    );
     final now = DateTime.now();
-    final nextIndex = isSameDay(date, now) ? events.indexWhere((e) => e.at(date).isAfter(now)) : -1;
+    final nextIndex = isSameDay(date, now)
+        ? events.indexWhere((e) => e.at(date).isAfter(now))
+        : -1;
 
     return Card(
       child: Padding(
@@ -542,7 +685,9 @@ class _ScheduleCard extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
                 child: Text(
                   'Power pumping: ${Protocol.powerPumpRoutine.join(' → ')}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
           ],
@@ -566,7 +711,10 @@ class _ScheduleRow extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: isNext
-          ? BoxDecoration(color: scheme.secondaryContainer, borderRadius: BorderRadius.circular(14))
+          ? BoxDecoration(
+              color: scheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(14),
+            )
           : null,
       child: Row(
         children: [
@@ -576,11 +724,17 @@ class _ScheduleRow extends StatelessWidget {
               event.time,
               style: theme.textTheme.labelLarge?.copyWith(
                 fontFeatures: const [FontFeature.tabularFigures()],
-                color: isNext ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+                color: isNext
+                    ? scheme.onSecondaryContainer
+                    : scheme.onSurfaceVariant,
               ),
             ),
           ),
-          Icon(eventIcon(event.kind), size: 20, color: isNext ? scheme.onSecondaryContainer : scheme.primary),
+          Icon(
+            eventIcon(event.kind),
+            size: 20,
+            color: isNext ? scheme.onSecondaryContainer : scheme.primary,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text.rich(
@@ -593,7 +747,9 @@ class _ScheduleRow extends StatelessWidget {
                   TextSpan(
                     text: '  ${event.detail}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: isNext ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+                      color: isNext
+                          ? scheme.onSecondaryContainer
+                          : scheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -601,7 +757,12 @@ class _ScheduleRow extends StatelessWidget {
             ),
           ),
           if (isNext)
-            Text('Up next', style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSecondaryContainer)),
+            Text(
+              'Up next',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: scheme.onSecondaryContainer,
+              ),
+            ),
         ],
       ),
     );

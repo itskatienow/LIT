@@ -6,15 +6,17 @@
 library;
 
 import '../util/dates.dart';
+import '../util/numbers.dart';
 
+/// Shown as Prime (build), Switch (birth) and Supply (lactation); see [PhaseInfo.label].
 enum Phase { notStarted, build, birth, lactation }
 
 extension PhaseInfo on Phase {
   String get label => switch (this) {
         Phase.notStarted => 'Not started',
-        Phase.build => 'Build',
-        Phase.birth => 'Birth',
-        Phase.lactation => 'Lactation',
+        Phase.build => 'Prime',
+        Phase.birth => 'Switch',
+        Phase.lactation => 'Supply',
       };
 }
 
@@ -24,7 +26,7 @@ enum EventKind { domperidone, estradiol, progesterone, pump, powerPump }
 extension EventKindInfo on EventKind {
   String get label => switch (this) {
         EventKind.domperidone => 'Domperidone',
-        EventKind.estradiol => 'Estradiol injections',
+        EventKind.estradiol => 'Estradiol',
         EventKind.progesterone => 'Progesterone',
         EventKind.pump => 'Pumping sessions',
         EventKind.powerPump => 'Power pumping',
@@ -32,6 +34,205 @@ extension EventKindInfo on EventKind {
 }
 
 enum EstradiolSlot { morning, evening }
+
+extension EstradiolSlotInfo on EstradiolSlot {
+  String get label => switch (this) {
+        EstradiolSlot.morning => 'morning',
+        EstradiolSlot.evening => 'evening',
+      };
+
+  String get short => switch (this) {
+        EstradiolSlot.morning => 'AM',
+        EstradiolSlot.evening => 'PM',
+      };
+}
+
+enum EstradiolMethod { injection, oral, sublingual }
+
+extension EstradiolMethodInfo on EstradiolMethod {
+  String get label => switch (this) {
+        EstradiolMethod.injection => 'Injection',
+        EstradiolMethod.oral => 'Oral',
+        EstradiolMethod.sublingual => 'Sublingual',
+      };
+}
+
+/// How estradiol is taken and how much, as set in Settings.
+///
+/// Injections: a weekly dose split over 1–3 injections on fixed days, each
+/// rounded up to the next [injectionStepMg]. Oral: the daily dose once, in
+/// the morning. Sublingual: half the daily dose morning and evening.
+class EstradiolPlan {
+  const EstradiolPlan({
+    this.method = EstradiolMethod.injection,
+    this.weeklyDoseMg = 6,
+    this.injectionsPerWeek = 3,
+    this.strengthMgPerMl,
+    this.dailyDoseMg,
+  });
+
+  final EstradiolMethod method;
+
+  /// Injections: total per week, in mg.
+  final double? weeklyDoseMg;
+
+  /// Injections: 1, 2 or 3 (see [injectionDays]).
+  final int injectionsPerWeek;
+
+  /// Injections: the vial's concentration, used to show the volume to draw.
+  final double? strengthMgPerMl;
+
+  /// Oral and sublingual: total per day, in mg.
+  final double? dailyDoseMg;
+
+  static const injectionCounts = [1, 2, 3];
+
+  /// Each injection is rounded up to a multiple of this.
+  static const injectionStepMg = 0.5;
+
+  /// Which days (and when) each weekly injection count falls on.
+  static const injectionDays = <int, Map<int, EstradiolSlot>>{
+    1: {DateTime.wednesday: EstradiolSlot.morning},
+    2: {DateTime.wednesday: EstradiolSlot.morning, DateTime.saturday: EstradiolSlot.evening},
+    3: {
+      DateTime.wednesday: EstradiolSlot.morning,
+      DateTime.friday: EstradiolSlot.evening,
+      DateTime.sunday: EstradiolSlot.morning,
+    },
+  };
+
+  static const _dayShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _dayLong = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  Map<int, EstradiolSlot> get _injectionDays => injectionDays[injectionsPerWeek] ?? injectionDays[3]!;
+
+  /// The weekly dose split evenly, before rounding.
+  double? get exactInjectionMg {
+    final weekly = weeklyDoseMg;
+    return weekly == null ? null : weekly / _injectionDays.length;
+  }
+
+  /// One injection: the weekly dose split evenly, rounded up to the next
+  /// [injectionStepMg].
+  double? get injectionDoseMg {
+    final exact = exactInjectionMg;
+    if (exact == null) return null;
+    // The allowance stops float noise (2.0000000001) from adding a step.
+    return (exact / injectionStepMg - 1e-9).ceil() * injectionStepMg;
+  }
+
+  bool get injectionRoundedUp {
+    final exact = exactInjectionMg, dose = injectionDoseMg;
+    return exact != null && dose != null && dose - exact > 1e-9;
+  }
+
+  /// What the rounded injections add up to in a week.
+  double? get injectedPerWeekMg {
+    final dose = injectionDoseMg;
+    return dose == null ? null : dose * _injectionDays.length;
+  }
+
+  /// Volume to draw for one injection; null until the strength is set.
+  double? get injectionVolumeMl {
+    final dose = injectionDoseMg, strength = strengthMgPerMl;
+    return dose == null || strength == null ? null : dose / strength;
+  }
+
+  /// One dose for the current method, in mg; null until the dose is set.
+  double? get doseMg => switch (method) {
+        EstradiolMethod.injection => injectionDoseMg,
+        EstradiolMethod.oral => dailyDoseMg,
+        EstradiolMethod.sublingual => dailyDoseMg == null ? null : dailyDoseMg! / 2,
+      };
+
+  /// "2 mg", or "2 mg · 0.4 mL" for an injection with a known strength.
+  /// Null until the dose is set.
+  String? get doseLabel {
+    final mg = doseMg;
+    if (mg == null) return null;
+    final ml = method == EstradiolMethod.injection ? injectionVolumeMl : null;
+    return ml == null ? '${formatDecimal(mg)} mg' : '${formatDecimal(mg)} mg · ${formatMl(ml)}';
+  }
+
+  static String formatMl(double ml) => '${formatDecimal(ml, maxDecimals: 3)} mL';
+
+  /// The doses due on [date], in order.
+  List<EstradiolSlot> slotsOn(DateTime date) => switch (method) {
+        EstradiolMethod.injection => [?_injectionDays[date.weekday]],
+        EstradiolMethod.oral => const [EstradiolSlot.morning],
+        EstradiolMethod.sublingual => const [EstradiolSlot.morning, EstradiolSlot.evening],
+      };
+
+  /// "Wed AM, Fri PM, Sun AM"
+  String get injectionDaysLabel =>
+      [for (final e in _injectionDays.entries) '${_dayShort[e.key - 1]} ${e.value.short}'].join(', ');
+
+  /// What the morning or evening time is used for; null when it isn't.
+  String? timeUsage(EstradiolSlot slot) {
+    switch (method) {
+      case EstradiolMethod.injection:
+        final days = [
+          for (final e in _injectionDays.entries)
+            if (e.value == slot) _dayLong[e.key - 1],
+        ];
+        if (days.isEmpty) return null;
+        return '${days.join(' & ')} ${days.length == 1 ? 'injection' : 'injections'}';
+      case EstradiolMethod.oral:
+        return slot == EstradiolSlot.morning ? 'Daily oral dose' : null;
+      case EstradiolMethod.sublingual:
+        return slot == EstradiolSlot.morning ? 'Morning sublingual dose' : 'Evening sublingual dose';
+    }
+  }
+
+  static const _unset = Object();
+
+  EstradiolPlan copyWith({
+    EstradiolMethod? method,
+    Object? weeklyDoseMg = _unset,
+    int? injectionsPerWeek,
+    Object? strengthMgPerMl = _unset,
+    Object? dailyDoseMg = _unset,
+  }) =>
+      EstradiolPlan(
+        method: method ?? this.method,
+        weeklyDoseMg: identical(weeklyDoseMg, _unset) ? this.weeklyDoseMg : weeklyDoseMg as double?,
+        injectionsPerWeek: injectionsPerWeek ?? this.injectionsPerWeek,
+        strengthMgPerMl: identical(strengthMgPerMl, _unset) ? this.strengthMgPerMl : strengthMgPerMl as double?,
+        dailyDoseMg: identical(dailyDoseMg, _unset) ? this.dailyDoseMg : dailyDoseMg as double?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'method': method.name,
+        'weeklyDoseMg': weeklyDoseMg,
+        'injectionsPerWeek': injectionsPerWeek,
+        'strengthMgPerMl': strengthMgPerMl,
+        'dailyDoseMg': dailyDoseMg,
+      };
+
+  factory EstradiolPlan.fromJson(Map<String, dynamic> json) {
+    double? positive(Object? v) => v is num && v > 0 ? v.toDouble() : null;
+    final count = json['injectionsPerWeek'];
+    return EstradiolPlan(
+      method: EstradiolMethod.values.asNameMap()[json['method']] ?? EstradiolMethod.injection,
+      weeklyDoseMg: positive(json['weeklyDoseMg']),
+      injectionsPerWeek: count is int && injectionDays.containsKey(count) ? count : 3,
+      strengthMgPerMl: positive(json['strengthMgPerMl']),
+      dailyDoseMg: positive(json['dailyDoseMg']),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is EstradiolPlan &&
+      other.method == method &&
+      other.weeklyDoseMg == weeklyDoseMg &&
+      other.injectionsPerWeek == injectionsPerWeek &&
+      other.strengthMgPerMl == strengthMgPerMl &&
+      other.dailyDoseMg == dailyDoseMg;
+
+  @override
+  int get hashCode => Object.hash(method, weeklyDoseMg, injectionsPerWeek, strengthMgPerMl, dailyDoseMg);
+}
 
 /// User-adjustable clock times (minutes after midnight) for the items the
 /// protocol only describes loosely ("morning", "nightly", "evening").
@@ -145,8 +346,8 @@ class Protocol {
 
   // Doses
   static const domperidoneTabletMg = 10;
-  static const estradiolMg = 2;
-  static const progesteroneMg = 300;
+  /// Nightly progesterone until changed in Settings.
+  static const double defaultProgesteroneMg = 300;
 
   /// Regular pumping sessions, 15–20 min each. 24:00 and 27:00 are midnight
   /// and the 3–4 AM session that close out the day.
@@ -213,16 +414,9 @@ class Protocol {
 
   // ---- Hormones -------------------------------------------------------------
 
-  /// Estradiol: Wednesday morning, Friday evening, Sunday morning.
-  static EstradiolSlot? estradiolSlot(int day, DateTime date) {
-    if (day < 1) return null;
-    return switch (date.weekday) {
-      DateTime.wednesday => EstradiolSlot.morning,
-      DateTime.friday => EstradiolSlot.evening,
-      DateTime.sunday => EstradiolSlot.morning,
-      _ => null,
-    };
-  }
+  /// Estradiol doses due on protocol [day] ([date]) under [plan].
+  static List<EstradiolSlot> estradiolSlots(int day, DateTime date, EstradiolPlan plan) =>
+      day < 1 ? const [] : plan.slotsOn(date);
 
   /// Progesterone: nightly through Day 40.
   static bool progesteroneScheduled(int day) => day >= 1 && day <= lastProgesteroneDay;
@@ -239,6 +433,8 @@ class Protocol {
     required int day,
     required DateTime date,
     ReminderTimes times = const ReminderTimes(),
+    EstradiolPlan estradiol = const EstradiolPlan(),
+    double? progesteroneMg = defaultProgesteroneMg,
   }) {
     if (day < 1) return const [];
     final events = <ScheduledEvent>[];
@@ -252,13 +448,18 @@ class Protocol {
       ));
     }
 
-    final slot = estradiolSlot(day, date);
-    if (slot != null) {
+    final estradiolDose = estradiol.doseMg;
+    final estradiolMl = estradiol.method == EstradiolMethod.injection ? estradiol.injectionVolumeMl : null;
+    for (final slot in estradiolSlots(day, date, estradiol)) {
       events.add(ScheduledEvent(
         kind: EventKind.estradiol,
         minuteOfDay: slot == EstradiolSlot.morning ? times.estradiolMorning : times.estradiolEvening,
-        title: 'Estradiol $estradiolMg mg',
-        detail: slot == EstradiolSlot.morning ? 'Injection · morning' : 'Injection · evening',
+        title: estradiolDose == null ? 'Estradiol' : 'Estradiol ${formatDecimal(estradiolDose)} mg',
+        detail: [
+          estradiol.method.label,
+          if (estradiolMl != null) EstradiolPlan.formatMl(estradiolMl),
+          if (estradiol.method != EstradiolMethod.oral) slot.label,
+        ].join(' · '),
       ));
     }
 
@@ -266,7 +467,7 @@ class Protocol {
       events.add(ScheduledEvent(
         kind: EventKind.progesterone,
         minuteOfDay: times.progesterone,
-        title: 'Progesterone $progesteroneMg mg',
+        title: progesteroneMg == null ? 'Progesterone' : 'Progesterone ${formatDecimal(progesteroneMg)} mg',
         detail: day == lastProgesteroneDay ? 'Nightly · last dose' : 'Nightly',
       ));
     }

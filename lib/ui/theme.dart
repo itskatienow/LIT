@@ -81,7 +81,7 @@ Color onPhaseColor(Phase phase) => phase == Phase.lactation ? Colors.white : _in
 IconData phaseIcon(Phase phase) => switch (phase) {
       Phase.notStarted => Icons.hourglass_empty_rounded,
       Phase.build => Icons.trending_up_rounded,
-      Phase.birth => Icons.child_care_rounded,
+      Phase.birth => Icons.swap_horiz_rounded,
       Phase.lactation => Icons.water_drop_rounded,
     };
 
