@@ -1,0 +1,25 @@
+# App icon generation. After changing the icon images, run:
+#   dart run flutter_launcher_icons
+#
+# lib/assets/App_Icon.png            original artwork (rounded corners baked in)
+# lib/assets/App_Icon_square.png     full-bleed square; each OS applies its own mask
+# lib/assets/App_Icon_foreground.png Android adaptive foreground, already padded to
+#                                    the safe zone (hence foreground_inset: 0)
+flutter_launcher_icons:
+  image_path: "lib/assets/App_Icon_square.png"
+
+  android: "ic_launcher"
+  min_sdk_android: 24
+  adaptive_icon_background: "#FDF1F0"
+  adaptive_icon_foreground: "lib/assets/App_Icon_foreground.png"
+  adaptive_icon_foreground_inset: 0
+
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#FDF1F0"
+
+  web:
+    generate: true
+    image_path: "lib/assets/App_Icon_square.png"
+    background_color: "#FDF1F0"
+    theme_color: "#8E4A6B"
