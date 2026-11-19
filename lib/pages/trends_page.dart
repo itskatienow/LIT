@@ -465,7 +465,6 @@ class _RecentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final phase = Protocol.phaseForDay(day);
-    final pScheme = phaseScheme(phase, theme.brightness);
     final parts = [
       if (day != null && day! >= 1) 'Day $day · ${phase.label}',
       if (sessions > 0) '$sessions ${sessions == 1 ? 'session' : 'sessions'}',
@@ -474,8 +473,8 @@ class _RecentTile extends StatelessWidget {
     return ListTile(
       onTap: onTap,
       leading: CircleAvatar(
-        backgroundColor: pScheme.primaryContainer,
-        foregroundColor: pScheme.onPrimaryContainer,
+        backgroundColor: phaseColor(phase),
+        foregroundColor: onPhaseColor(phase),
         child: Icon(phaseIcon(phase), size: 20),
       ),
       title: Text(formatShort(date)),
