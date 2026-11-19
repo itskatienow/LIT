@@ -39,6 +39,22 @@ void main() {
     expect(restored.entries['2026-12-15']!.powerPumped, isTrue);
   });
 
+  test('estradiol doses: round-trip and days saved by older versions', () {
+    final text = Backup.encode(
+      settings: settings,
+      entries: {'2026-11-04': const DayEntry(estradiolDoses: 2)},
+      now: DateTime(2026, 12, 20),
+    );
+    expect(Backup.decode(text).entries['2026-11-04']!.estradiolDoses, 2);
+
+    // Older versions saved a yes/no "estradiol" and read only that.
+    expect(DayEntry.fromJson(const {'estradiol': true}).estradiolDoses, 1);
+    expect(DayEntry.fromJson(const {'estradiol': false}).estradiolDoses, 0);
+    expect(const DayEntry(estradiolDoses: 2).toJson()['estradiol'], isTrue);
+    expect(const DayEntry().isEmpty, isTrue);
+    expect(const DayEntry(estradiolDoses: 1).isEmpty, isFalse);
+  });
+
   test('names the file by date', () {
     expect(Backup.fileName(DateTime(2026, 1, 5, 14)), 'LIT-backup-2026-01-05.json');
   });

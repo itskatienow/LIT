@@ -9,6 +9,8 @@ class AppSettings {
     this.remindersEnabled = false,
     this.reminderKinds = const {...EventKind.values},
     this.times = const ReminderTimes(),
+    this.estradiol = const EstradiolPlan(),
+    this.progesteroneMg = Protocol.defaultProgesteroneMg,
   });
 
   /// Day 1 of the protocol.
@@ -24,6 +26,10 @@ class AppSettings {
   final bool remindersEnabled;
   final Set<EventKind> reminderKinds;
   final ReminderTimes times;
+  final EstradiolPlan estradiol;
+
+  /// Nightly progesterone dose; null when cleared in Settings.
+  final double? progesteroneMg;
 
   DateTime? get effectiveTabletCountDate => tabletCountDate ?? startDate;
 
@@ -36,6 +42,8 @@ class AppSettings {
     bool? remindersEnabled,
     Set<EventKind>? reminderKinds,
     ReminderTimes? times,
+    EstradiolPlan? estradiol,
+    Object? progesteroneMg = _unset,
   }) =>
       AppSettings(
         startDate: identical(startDate, _unset) ? this.startDate : startDate as DateTime?,
@@ -45,6 +53,8 @@ class AppSettings {
         remindersEnabled: remindersEnabled ?? this.remindersEnabled,
         reminderKinds: reminderKinds ?? this.reminderKinds,
         times: times ?? this.times,
+        estradiol: estradiol ?? this.estradiol,
+        progesteroneMg: identical(progesteroneMg, _unset) ? this.progesteroneMg : progesteroneMg as double?,
       );
 
   /// Changes to anything in here require reminders to be rescheduled.
@@ -53,6 +63,8 @@ class AppSettings {
         remindersEnabled,
         Object.hashAllUnordered(reminderKinds),
         times,
+        estradiol,
+        progesteroneMg,
       );
 
   Map<String, dynamic> toJson() => {
@@ -62,6 +74,8 @@ class AppSettings {
         'remindersEnabled': remindersEnabled,
         'reminderKinds': [for (final k in reminderKinds) k.name],
         'times': times.toJson(),
+        'estradiol': estradiol.toJson(),
+        'progesteroneMg': progesteroneMg,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -81,6 +95,16 @@ class AppSettings {
       times: json['times'] is Map<String, dynamic>
           ? ReminderTimes.fromJson(json['times'] as Map<String, dynamic>)
           : const ReminderTimes(),
+      // Settings saved before the estradiol options keep the original plan.
+      estradiol: json['estradiol'] is Map<String, dynamic>
+          ? EstradiolPlan.fromJson(json['estradiol'] as Map<String, dynamic>)
+          : const EstradiolPlan(),
+      // Settings saved before the dose was adjustable keep the original 300 mg.
+      progesteroneMg: !json.containsKey('progesteroneMg')
+          ? Protocol.defaultProgesteroneMg
+          : json['progesteroneMg'] is num && (json['progesteroneMg'] as num) > 0
+              ? (json['progesteroneMg'] as num).toDouble()
+              : null,
     );
   }
 }

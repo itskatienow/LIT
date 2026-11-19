@@ -2,10 +2,13 @@
   // Pick a configuration in the Run and Debug tab, then press F5.
   // The target device is the one shown in the VS Code status bar.
   //
-  // Debug and profile builds install a separate "LIT Dev" app
-  // (com.lactationinductiontracker.app.dev) with its own data, so testing
-  // never touches the real app. Use "LIT (release)" to install or update
-  // the real app on your phone.
+  // These install the separate "LIT Dev" app
+  // (com.lactationinductiontracker.app.dev), which has its own data, so
+  // testing never touches the real app.
+  //
+  // To install or update the REAL app, press Ctrl+Shift+B (task "Install LIT
+  // on phone"). Don't use a release run from here: stopping a run session
+  // force-stops the app, which makes Android delete its scheduled reminders.
   "version": "0.2.0",
   "configurations": [
     {
@@ -20,14 +23,6 @@
       "type": "dart",
       "program": "lib/main.dart",
       "flutterMode": "profile"
-    },
-    {
-      // Signed with your release key (android/key.properties).
-      "name": "LIT (release) · real app",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "flutterMode": "release"
     },
     {
       // Quick UI preview in the browser. Reminders don't work on web.

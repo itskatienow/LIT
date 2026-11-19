@@ -162,8 +162,8 @@ class TrendStats {
         final entry = entries[dateKey(date)] ?? DayEntry.empty;
         if (Protocol.progesteroneScheduled(day)) progScheduled++;
         if (entry.progesteroneTaken) progLogged++;
-        if (Protocol.estradiolSlot(day, date) != null) estScheduled++;
-        if (entry.estradiolTaken) estLogged++;
+        estScheduled += Protocol.estradiolSlots(day, date, settings.estradiol).length;
+        estLogged += entry.estradiolDoses;
         domScheduled += Protocol.domperidoneTabletsForDay(day);
         domLogged += entry.domperidoneTablets;
         if (Protocol.pumpingScheduled(day)) pumpScheduled += Protocol.pumpSessionsPerDay;
@@ -171,7 +171,12 @@ class TrendStats {
       }
       adherence
         ..add(Adherence('Domperidone', domLogged, domScheduled, 'tablets'))
-        ..add(Adherence('Estradiol', estLogged, estScheduled, 'injections'))
+        ..add(Adherence(
+          'Estradiol',
+          estLogged,
+          estScheduled,
+          settings.estradiol.method == EstradiolMethod.injection ? 'injections' : 'doses',
+        ))
         ..add(Adherence('Progesterone', progLogged, progScheduled, 'nights'));
       if (pumpScheduled > 0 || pumpLogged > 0) {
         adherence.add(Adherence('Pumping', pumpLogged, pumpScheduled, 'sessions'));
