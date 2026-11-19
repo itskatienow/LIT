@@ -483,7 +483,6 @@ class _PhaseLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final pScheme = phaseScheme(phase, theme.brightness);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
@@ -492,10 +491,10 @@ class _PhaseLine extends StatelessWidget {
             width: 84,
             padding: const EdgeInsets.symmetric(vertical: 3),
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: pScheme.primaryContainer, borderRadius: BorderRadius.circular(99)),
+            decoration: BoxDecoration(color: phaseColor(phase), borderRadius: BorderRadius.circular(99)),
             child: Text(
               phase.label,
-              style: theme.textTheme.labelMedium?.copyWith(color: pScheme.onPrimaryContainer, fontWeight: FontWeight.w600),
+              style: theme.textTheme.labelMedium?.copyWith(color: onPhaseColor(phase), fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(width: 12),

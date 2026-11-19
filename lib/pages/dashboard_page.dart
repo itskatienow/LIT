@@ -152,8 +152,8 @@ class PhaseHeader extends StatelessWidget {
     final start = settings.startDate;
     final day = Protocol.dayNumber(start, date);
     final phase = Protocol.phaseForDay(day);
-    final scheme = phaseScheme(phase, theme.brightness);
-    final onColor = scheme.onPrimaryContainer;
+    final color = phaseColor(phase);
+    final onColor = onPhaseColor(phase);
 
     String headline;
     String? suffix;
@@ -188,7 +188,7 @@ class PhaseHeader extends StatelessWidget {
     final milestone = start != null && day != null ? _milestoneText(start, day) : null;
 
     return Container(
-      decoration: BoxDecoration(color: scheme.primaryContainer, borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(24)),
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,7 +211,7 @@ class PhaseHeader extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: scheme.primary.withValues(alpha: 0.12),
+                    color: onColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
@@ -242,8 +242,8 @@ class PhaseHeader extends StatelessWidget {
               value: progress,
               minHeight: 8,
               borderRadius: BorderRadius.circular(8),
-              color: scheme.primary,
-              backgroundColor: scheme.primary.withValues(alpha: 0.15),
+              color: onColor,
+              backgroundColor: onColor.withValues(alpha: 0.18),
             ),
           ],
           if (caption != null) ...[

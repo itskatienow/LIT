@@ -2,10 +2,30 @@ import 'package:flutter/material.dart';
 
 import '../models/protocol.dart';
 
-const _seed = Color(0xFF8E4A6B); // plum
+// One pink ramp, a step darker for each phase.
+const _blush = Color(0xFFF4E4EB); // not started
+const _lightPink = Color(0xFFF7B3CC); // Prime
+const _rose = Color(0xFFE7779F); // Switch
+const _deepPink = Color(0xFFC2316F); // Supply
+const _ink = Color(0xFF3D0A24); // text on the lighter pinks
+
+ColorScheme _appScheme(Brightness brightness) {
+  final seeded = ColorScheme.fromSeed(seedColor: _deepPink, brightness: brightness);
+  // Tonal fills (nav indicator, selected segments, info boxes) use the pink
+  // container tones; the derived secondary is a muddy mauve in dark mode.
+  final base = seeded.copyWith(
+    secondaryContainer: seeded.primaryContainer,
+    onSecondaryContainer: seeded.onPrimaryContainer,
+  );
+  // The accent (toggles, labels, buttons) is the deep pink on light
+  // backgrounds and the light pink on dark ones.
+  return brightness == Brightness.light
+      ? base.copyWith(primary: _deepPink, onPrimary: Colors.white)
+      : base.copyWith(primary: _lightPink, onPrimary: _ink);
+}
 
 ThemeData buildTheme(Brightness brightness) {
-  final scheme = ColorScheme.fromSeed(seedColor: _seed, brightness: brightness);
+  final scheme = _appScheme(brightness);
   // Start from the platform typography so custom styles keep its font family.
   final textTheme = ThemeData(colorScheme: scheme).textTheme;
   final fieldRadius = BorderRadius.circular(14);
@@ -47,19 +67,16 @@ ThemeData buildTheme(Brightness brightness) {
   );
 }
 
-Color phaseSeed(Phase phase) => switch (phase) {
-      Phase.notStarted => const Color(0xFF7A7480),
-      Phase.build => const Color(0xFF6A4FB3), // violet
-      Phase.birth => const Color(0xFFD9653B), // coral
-      Phase.lactation => const Color(0xFF2A8C82), // teal
+/// The phase's pink, the same in light and dark mode.
+Color phaseColor(Phase phase) => switch (phase) {
+      Phase.notStarted => _blush,
+      Phase.build => _lightPink,
+      Phase.birth => _rose,
+      Phase.lactation => _deepPink,
     };
 
-final _phaseSchemes = <(Phase, Brightness), ColorScheme>{};
-
-ColorScheme phaseScheme(Phase phase, Brightness brightness) => _phaseSchemes.putIfAbsent(
-      (phase, brightness),
-      () => ColorScheme.fromSeed(seedColor: phaseSeed(phase), brightness: brightness),
-    );
+/// Text and icon colour for content drawn on [phaseColor].
+Color onPhaseColor(Phase phase) => phase == Phase.lactation ? Colors.white : _ink;
 
 IconData phaseIcon(Phase phase) => switch (phase) {
       Phase.notStarted => Icons.hourglass_empty_rounded,
